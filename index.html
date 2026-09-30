@@ -67,7 +67,7 @@ body{font-family:var(--font-body); background:var(--bg); color:var(--fg);}
 
 @media print{
   body{ background:#fff; }
-  .btn-primary, #btnRefresh, .print-menu-wrap, .crumb-back, .footer-note, .sync-note{ display:none !important; }
+  .btn-primary, #btnRefresh, #btnPrintGlobal, #btnPrintEvent, #btnPrintAll, .crumb-back, .footer-note, .sync-note{ display:none !important; }
   .app{ max-width:100%; padding:0; gap:12px; }
   .section, .kpi{ box-shadow:none; border:1px solid #ccc; break-inside:avoid; }
   .event-row{ cursor:default; break-inside:avoid; }
@@ -86,12 +86,7 @@ body{font-family:var(--font-body); background:var(--bg); color:var(--fg);}
 @keyframes vsdViewIn{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:translateY(0); } }
 .view-enter{ animation:vsdViewIn .32s cubic-bezier(.22,.61,.36,1); }
 
-.print-menu-wrap{ position:relative; }
-.print-menu{ position:absolute; top:calc(100% + 6px); right:0; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); padding:6px; display:flex; flex-direction:column; gap:2px; min-width:200px; z-index:40; }
-.print-menu button{ background:none; border:none; text-align:left; font-family:inherit; font-size:.82rem; font-weight:600; color:var(--fg); padding:9px 10px; border-radius:7px; cursor:pointer; text-transform:none; letter-spacing:0; }
-.print-menu button:hover{ background:var(--surface-2); }
-.print-menu button:disabled{ color:var(--muted); cursor:default; background:none; }
-.print-menu-close{ border-top:1px solid var(--line); margin-top:2px; padding-top:9px !important; color:var(--muted) !important; font-weight:700 !important; }
+
 
 .view{ display:flex; flex-direction:column; gap:18px; }
 
@@ -173,15 +168,9 @@ tbody td.name{ color:var(--fg); font-weight:700; }
     </div>
     <div class="topbar-actions">
       <button class="btn btn-ghost" id="btnRefresh" type="button">&#8635; Actualizar</button>
-      <div class="print-menu-wrap" id="printMenuWrap">
-        <button class="btn btn-ghost" id="btnPrint" type="button" aria-haspopup="true" aria-expanded="false">&#128424; Imprimir &#9662;</button>
-        <div class="print-menu" id="printMenu" hidden>
-          <button type="button" data-print="global">Panel general</button>
-          <button type="button" data-print="event" id="printMenuEvent">Este evento</button>
-          <button type="button" data-print="all">Todo (panel + eventos)</button>
-          <button type="button" class="print-menu-close" id="printMenuClose">&#10005; Cerrar</button>
-        </div>
-      </div>
+      <button class="btn btn-ghost" id="btnPrintGlobal" type="button">&#128424; Panel general</button>
+      <button class="btn btn-ghost" id="btnPrintEvent" type="button">&#128424; Este evento</button>
+      <button class="btn btn-ghost" id="btnPrintAll" type="button">&#128424; Todo</button>
     </div>
   </header>
 
@@ -365,9 +354,9 @@ tbody td.name{ color:var(--fg); font-weight:700; }
   var btnPrint = document.getElementById('btnPrint');
   var btnRefresh = document.getElementById('btnRefresh');
   var syncNoteEl = document.getElementById('syncNote');
-  var printMenuWrap = document.getElementById('printMenuWrap');
-  var printMenu = document.getElementById('printMenu');
-  var printMenuEvent = document.getElementById('printMenuEvent');
+  var btnPrintGlobal = document.getElementById('btnPrintGlobal');
+  var btnPrintEvent = document.getElementById('btnPrintEvent');
+  var btnPrintAll = document.getElementById('btnPrintAll');
   var printAllContainer = document.getElementById('printAllContainer');
 
   /* ---------- state ---------- */
@@ -383,6 +372,7 @@ tbody td.name{ color:var(--fg); font-weight:700; }
   window.addEventListener('hashchange', renderRoute);
 
   function renderRoute(){
+    refreshPrintButtons();
     var slug = currentSlug();
     if(slug){
       var ev = EVENTS.find(function(e){ return e.id === slug; });
@@ -540,35 +530,10 @@ tbody td.name{ color:var(--fg); font-weight:700; }
   btnBack.addEventListener('click', goGlobal);
   btnRefresh.addEventListener('click', loadAll);
 
-  /* ---------- impresión: panel general / este evento / todo ---------- */
-  function openPrintMenu(){
-    printMenuEvent.disabled = !currentSlug();
-    printMenu.hidden = false;
-    btnPrint.setAttribute('aria-expanded', 'true');
+  /* ---------- impresión: 3 botones directos, sin menú ---------- */
+  function refreshPrintButtons(){
+    btnPrintEvent.disabled = !currentSlug();
   }
-  function closePrintMenu(){
-    printMenu.hidden = true;
-    btnPrint.setAttribute('aria-expanded', 'false');
-  }
-  btnPrint.addEventListener('click', function(e){
-    e.stopPropagation();
-    if(printMenu.hidden) openPrintMenu(); else closePrintMenu();
-  });
-  /* Cierre robusto: capturamos el click/tap en TODO el documento (fase de
-     captura, antes que cualquier otro handler) y cerramos el menú si el
-     toque fue afuera de #printMenuWrap. También se cierra al cambiar de
-     vista, hacer scroll o apretar Escape, para que nunca quede "trabado". */
-  document.addEventListener('pointerdown', function(e){
-    if(!printMenu.hidden && !e.target.closest('#printMenuWrap')) closePrintMenu();
-  }, true);
-  document.addEventListener('click', function(e){
-    if(!printMenu.hidden && !e.target.closest('#printMenuWrap')) closePrintMenu();
-  }, true);
-  document.addEventListener('keydown', function(e){
-    if(e.key === 'Escape') closePrintMenu();
-  });
-  window.addEventListener('scroll', function(){ if(!printMenu.hidden) closePrintMenu(); }, true);
-  window.addEventListener('hashchange', function(){ closePrintMenu(); });
 
   function buildPrintAllHTML(){
     var sorted = EVENTS.slice().sort(function(a,b){ return eventStats(b).totalPax - eventStats(a).totalPax; });
@@ -579,26 +544,19 @@ tbody td.name{ color:var(--fg); font-weight:700; }
     return html;
   }
 
-  function printView(mode){
-    closePrintMenu();
-    if(mode === 'global'){
-      viewGlobalEl.innerHTML = renderGlobalHTML(EVENTS);
-      document.body.classList.add('print-force-global');
-      window.print();
-    } else if(mode === 'event'){
-      if(!currentSlug()) return;
-      window.print();
-    } else if(mode === 'all'){
-      printAllContainer.innerHTML = buildPrintAllHTML();
-      document.body.classList.add('print-all-mode');
-      window.print();
-    }
-  }
-  printMenu.addEventListener('click', function(e){
-    if(e.target.closest('#printMenuClose')){ closePrintMenu(); return; }
-    var btn = e.target.closest('button[data-print]');
-    if(!btn || btn.disabled) return;
-    printView(btn.dataset.print);
+  btnPrintGlobal.addEventListener('click', function(){
+    viewGlobalEl.innerHTML = renderGlobalHTML(EVENTS);
+    document.body.classList.add('print-force-global');
+    window.print();
+  });
+  btnPrintEvent.addEventListener('click', function(){
+    if(!currentSlug()) return;
+    window.print();
+  });
+  btnPrintAll.addEventListener('click', function(){
+    printAllContainer.innerHTML = buildPrintAllHTML();
+    document.body.classList.add('print-all-mode');
+    window.print();
   });
   window.addEventListener('afterprint', function(){
     document.body.classList.remove('print-force-global', 'print-all-mode');
