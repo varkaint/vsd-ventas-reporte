@@ -91,6 +91,7 @@ body{font-family:var(--font-body); background:var(--bg); color:var(--fg);}
 .print-menu button{ background:none; border:none; text-align:left; font-family:inherit; font-size:.82rem; font-weight:600; color:var(--fg); padding:9px 10px; border-radius:7px; cursor:pointer; text-transform:none; letter-spacing:0; }
 .print-menu button:hover{ background:var(--surface-2); }
 .print-menu button:disabled{ color:var(--muted); cursor:default; background:none; }
+.print-menu-close{ border-top:1px solid var(--line); margin-top:2px; padding-top:9px !important; color:var(--muted) !important; font-weight:700 !important; }
 
 .view{ display:flex; flex-direction:column; gap:18px; }
 
@@ -178,6 +179,7 @@ tbody td.name{ color:var(--fg); font-weight:700; }
           <button type="button" data-print="global">Panel general</button>
           <button type="button" data-print="event" id="printMenuEvent">Este evento</button>
           <button type="button" data-print="all">Todo (panel + eventos)</button>
+          <button type="button" class="print-menu-close" id="printMenuClose">&#10005; Cerrar</button>
         </div>
       </div>
     </div>
@@ -552,12 +554,21 @@ tbody td.name{ color:var(--fg); font-weight:700; }
     e.stopPropagation();
     if(printMenu.hidden) openPrintMenu(); else closePrintMenu();
   });
+  /* Cierre robusto: capturamos el click/tap en TODO el documento (fase de
+     captura, antes que cualquier otro handler) y cerramos el menú si el
+     toque fue afuera de #printMenuWrap. También se cierra al cambiar de
+     vista, hacer scroll o apretar Escape, para que nunca quede "trabado". */
+  document.addEventListener('pointerdown', function(e){
+    if(!printMenu.hidden && !e.target.closest('#printMenuWrap')) closePrintMenu();
+  }, true);
   document.addEventListener('click', function(e){
     if(!printMenu.hidden && !e.target.closest('#printMenuWrap')) closePrintMenu();
-  });
+  }, true);
   document.addEventListener('keydown', function(e){
     if(e.key === 'Escape') closePrintMenu();
   });
+  window.addEventListener('scroll', function(){ if(!printMenu.hidden) closePrintMenu(); }, true);
+  window.addEventListener('hashchange', function(){ closePrintMenu(); });
 
   function buildPrintAllHTML(){
     var sorted = EVENTS.slice().sort(function(a,b){ return eventStats(b).totalPax - eventStats(a).totalPax; });
@@ -584,6 +595,7 @@ tbody td.name{ color:var(--fg); font-weight:700; }
     }
   }
   printMenu.addEventListener('click', function(e){
+    if(e.target.closest('#printMenuClose')){ closePrintMenu(); return; }
     var btn = e.target.closest('button[data-print]');
     if(!btn || btn.disabled) return;
     printView(btn.dataset.print);
