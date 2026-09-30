@@ -67,24 +67,43 @@ body{font-family:var(--font-body); background:var(--bg); color:var(--fg);}
 
 @media print{
   body{ background:#fff; }
-  .btn-primary, #btnRefresh, #btnPrintGlobal, #btnPrintEvent, #btnPrintAll, .crumb-back, .footer-note, .sync-note{ display:none !important; }
-  .app{ max-width:100%; padding:0; gap:12px; }
-  .section, .kpi{ box-shadow:none; border:1px solid #ccc; break-inside:avoid; }
-  .event-row{ cursor:default; break-inside:avoid; }
-  #printAllContainer{ display:none; }
-  body.print-all-mode #printAllContainer{ display:block; }
-  body.print-all-mode .crumbs, body.print-all-mode #viewGlobal, body.print-all-mode #viewEvent{ display:none !important; }
-  body.print-force-global #viewEvent{ display:none !important; }
-  body.print-force-global #viewGlobal{ display:block !important; }
-  .print-break{ break-before:page; page-break-before:always; }
-  .print-block{ display:flex; flex-direction:column; gap:18px; margin-bottom:24px; }
-  .print-title{ font-size:1.1rem; font-weight:900; text-transform:uppercase; letter-spacing:-.01em; margin:0 0 4px; }
+  .btn-primary, #btnRefresh, #btnDownloadGlobal, #btnDownloadEvent, #btnDownloadAll, .crumb-back, .footer-note, .sync-note{ display:none !important; }
+  .section, .kpi{ box-shadow:none; border:1px solid #ccc; }
 }
 
-#printAllContainer{ display:none; }
+/* Contenedor invisible donde se arma el HTML que se convierte a PDF para
+   descargar — vive fuera de la pantalla (no display:none) para que
+   html2canvas pueda medirlo y "fotografiarlo" con estilos reales. Fuerza
+   el tema claro siempre, sin importar el modo oscuro del visitante, para
+   que lo que llega a la imprenta salga siempre con fondo blanco. */
+#pdfContainer{ position:absolute; left:-9999px; top:0; width:900px; }
+#pdfContainer.pdf-light{
+  --bg:#eef0f3; --surface:#ffffff; --surface-2:#f4f5f8; --line:#dee1e6;
+  --fg:#15151a; --soft:#5a5a62; --muted:#9a9aa2;
+  --accent:#e30613; --accent-d:#b00410; --accent-soft:#fbe4e6; --accent-shadow:rgba(227,6,19,.30); --accent-ink:#ffffff;
+  --stable:#23232b; --stable-soft:#e6e6ea; --stable-ink:#ffffff;
+  --ok:#1a8a4a; --shadow:none;
+  background:#fff; color:#15151a; padding:24px;
+}
+.pdf-block{ display:flex; flex-direction:column; gap:18px; margin-bottom:28px; }
+.pdf-block + .pdf-block{ break-before:page; page-break-before:always; }
+.pdf-title{ font-size:1.15rem; font-weight:900; text-transform:uppercase; letter-spacing:-.01em; margin:0; color:#15151a; }
 
-@keyframes vsdViewIn{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:translateY(0); } }
-.view-enter{ animation:vsdViewIn .32s cubic-bezier(.22,.61,.36,1); }
+@keyframes vsdViewIn{
+  from{ opacity:0; transform:translateX(22px); }
+  to{ opacity:1; transform:translateX(0); }
+}
+@keyframes vsdViewBack{
+  from{ opacity:0; transform:translateX(-16px); }
+  to{ opacity:1; transform:translateX(0); }
+}
+@keyframes vsdCrumbIn{
+  from{ opacity:0; transform:translateX(-6px); }
+  to{ opacity:1; transform:translateX(0); }
+}
+.view-enter{ animation:vsdViewIn .38s cubic-bezier(.22,.61,.36,1); }
+.view-enter-back{ animation:vsdViewBack .32s cubic-bezier(.22,.61,.36,1); }
+.crumbs.crumb-enter{ animation:vsdCrumbIn .38s cubic-bezier(.22,.61,.36,1) .05s both; }
 
 
 
@@ -168,9 +187,9 @@ tbody td.name{ color:var(--fg); font-weight:700; }
     </div>
     <div class="topbar-actions">
       <button class="btn btn-ghost" id="btnRefresh" type="button">&#8635; Actualizar</button>
-      <button class="btn btn-ghost" id="btnPrintGlobal" type="button">&#128424; Panel general</button>
-      <button class="btn btn-ghost" id="btnPrintEvent" type="button">&#128424; Este evento</button>
-      <button class="btn btn-ghost" id="btnPrintAll" type="button">&#128424; Todo</button>
+      <button class="btn btn-ghost" id="btnDownloadGlobal" type="button">&#8681; Descargar panel general</button>
+      <button class="btn btn-ghost" id="btnDownloadEvent" type="button">&#8681; Descargar este evento</button>
+      <button class="btn btn-ghost" id="btnDownloadAll" type="button">&#8681; Descargar todo</button>
     </div>
   </header>
 
@@ -180,13 +199,14 @@ tbody td.name{ color:var(--fg); font-weight:700; }
 
   <main id="viewGlobal" class="view"></main>
   <main id="viewEvent" class="view" hidden></main>
-  <div id="printAllContainer"></div>
+  <div id="pdfContainer" class="app pdf-light"></div>
 
   <p class="sync-note" id="syncNote"></p>
   <p class="footer-note">VSD Eventos &middot; Villa Carlos Paz, C&oacute;rdoba</p>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
 <script>
 (function(){
   "use strict";
@@ -351,13 +371,12 @@ tbody td.name{ color:var(--fg); font-weight:700; }
   var viewGlobalEl = document.getElementById('viewGlobal');
   var viewEventEl = document.getElementById('viewEvent');
   var btnBack = document.getElementById('btnBack');
-  var btnPrint = document.getElementById('btnPrint');
   var btnRefresh = document.getElementById('btnRefresh');
   var syncNoteEl = document.getElementById('syncNote');
-  var btnPrintGlobal = document.getElementById('btnPrintGlobal');
-  var btnPrintEvent = document.getElementById('btnPrintEvent');
-  var btnPrintAll = document.getElementById('btnPrintAll');
-  var printAllContainer = document.getElementById('printAllContainer');
+  var btnDownloadGlobal = document.getElementById('btnDownloadGlobal');
+  var btnDownloadEvent = document.getElementById('btnDownloadEvent');
+  var btnDownloadAll = document.getElementById('btnDownloadAll');
+  var pdfContainer = document.getElementById('pdfContainer');
 
   /* ---------- state ---------- */
   var EVENTS = [];
@@ -372,7 +391,7 @@ tbody td.name{ color:var(--fg); font-weight:700; }
   window.addEventListener('hashchange', renderRoute);
 
   function renderRoute(){
-    refreshPrintButtons();
+    refreshDownloadButtons();
     var slug = currentSlug();
     if(slug){
       var ev = EVENTS.find(function(e){ return e.id === slug; });
@@ -387,19 +406,22 @@ tbody td.name{ color:var(--fg); font-weight:700; }
     viewGlobalEl.innerHTML = '<div class="section loading">Cargando datos&hellip;</div>';
   }
 
-  function animateIn(el){
-    el.classList.remove('view-enter');
+  function animateIn(el, animClass){
+    el.classList.remove('view-enter', 'view-enter-back');
     void el.offsetWidth; /* reflow para poder re-disparar la animación */
-    el.classList.add('view-enter');
+    el.classList.add(animClass);
   }
 
   function showGlobalView(){
+    var cameFromEvent = !viewEventEl.hidden;
     viewTitleEl.textContent = 'Panel de inscripciones';
     crumbsEl.hidden = true;
+    crumbsEl.classList.remove('crumb-enter');
     viewEventEl.hidden = true;
     viewGlobalEl.hidden = false;
     viewGlobalEl.innerHTML = renderGlobalHTML(EVENTS);
-    animateIn(viewGlobalEl);
+    animateIn(viewGlobalEl, 'view-enter-back');
+    if(cameFromEvent) window.scrollTo({ top:0, behavior:'smooth' });
   }
 
   function showEventView(ev){
@@ -408,7 +430,12 @@ tbody td.name{ color:var(--fg); font-weight:700; }
     viewGlobalEl.hidden = true;
     viewEventEl.hidden = false;
     viewEventEl.innerHTML = renderEventHTML(ev);
-    animateIn(viewEventEl);
+    animateIn(viewEventEl, 'view-enter');
+    animateIn(crumbsEl, 'crumb-enter');
+    /* siempre arranca arriba de todo, con el título + "← Panel general"
+       visibles de entrada, para que quede claro que ya no estás en el
+       panel general sino adentro de un evento puntual. */
+    window.scrollTo({ top:0, behavior:'smooth' });
   }
 
   /* ---------- render: global dashboard ---------- */
@@ -530,37 +557,58 @@ tbody td.name{ color:var(--fg); font-weight:700; }
   btnBack.addEventListener('click', goGlobal);
   btnRefresh.addEventListener('click', loadAll);
 
-  /* ---------- impresión: 3 botones directos, sin menú ---------- */
-  function refreshPrintButtons(){
-    btnPrintEvent.disabled = !currentSlug();
+  /* ---------- descargar en PDF: 3 botones directos, sin diálogo de imprimir ----------
+     Arma el contenido en #pdfContainer (fuera de pantalla, siempre en tema
+     claro) y usa html2pdf para bajarlo como archivo .pdf listo para mandar
+     a la imprenta. */
+  function refreshDownloadButtons(){
+    btnDownloadEvent.disabled = !currentSlug();
   }
 
-  function buildPrintAllHTML(){
-    var sorted = EVENTS.slice().sort(function(a,b){ return eventStats(b).totalPax - eventStats(a).totalPax; });
-    var html = '<section class="print-block"><h1 class="print-title">Panel general</h1>' + renderGlobalHTML(EVENTS) + '</section>';
-    sorted.forEach(function(ev){
-      html += '<section class="print-block print-break"><h1 class="print-title">'+escapeHtml(ev.label||ev.discipline)+'</h1>' + renderEventHTML(ev) + '</section>';
+  function slugifyFile(s){
+    return String(s||'archivo').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-+|-+$)/g,'') || 'archivo';
+  }
+
+  function downloadPdf(innerHtml, filename, btn){
+    pdfContainer.innerHTML = innerHtml;
+    var originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Generando PDF…';
+    var opt = {
+      margin: 8,
+      filename: filename,
+      image: { type:'jpeg', quality:0.98 },
+      html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff' },
+      jsPDF: { unit:'mm', format:'a4', orientation:'portrait' },
+      pagebreak: { mode:['css','legacy'] }
+    };
+    html2pdf().set(opt).from(pdfContainer).save().catch(function(err){
+      alert('No pudimos generar el PDF. Probá de nuevo en unos segundos.');
+    }).finally(function(){
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+      pdfContainer.innerHTML = '';
     });
-    return html;
   }
 
-  btnPrintGlobal.addEventListener('click', function(){
-    viewGlobalEl.innerHTML = renderGlobalHTML(EVENTS);
-    document.body.classList.add('print-force-global');
-    window.print();
+  btnDownloadGlobal.addEventListener('click', function(){
+    var html = '<div class="pdf-block"><h1 class="pdf-title">Panel de inscripciones — VSD Eventos</h1><div class="view">' + renderGlobalHTML(EVENTS) + '</div></div>';
+    downloadPdf(html, 'panel-general-vsd.pdf', btnDownloadGlobal);
   });
-  btnPrintEvent.addEventListener('click', function(){
-    if(!currentSlug()) return;
-    window.print();
+  btnDownloadEvent.addEventListener('click', function(){
+    var slug = currentSlug();
+    var ev = slug && EVENTS.find(function(e){ return e.id === slug; });
+    if(!ev) return;
+    var html = '<div class="pdf-block"><h1 class="pdf-title">'+escapeHtml(ev.label||ev.discipline)+'</h1><div class="view">' + renderEventHTML(ev) + '</div></div>';
+    downloadPdf(html, slugifyFile(ev.label||ev.discipline)+'-vsd.pdf', btnDownloadEvent);
   });
-  btnPrintAll.addEventListener('click', function(){
-    printAllContainer.innerHTML = buildPrintAllHTML();
-    document.body.classList.add('print-all-mode');
-    window.print();
-  });
-  window.addEventListener('afterprint', function(){
-    document.body.classList.remove('print-force-global', 'print-all-mode');
-    renderRoute();
+  btnDownloadAll.addEventListener('click', function(){
+    var sorted = EVENTS.slice().sort(function(a,b){ return eventStats(b).totalPax - eventStats(a).totalPax; });
+    var html = '<div class="pdf-block"><h1 class="pdf-title">Panel de inscripciones — VSD Eventos</h1><div class="view">' + renderGlobalHTML(EVENTS) + '</div></div>';
+    sorted.forEach(function(ev){
+      html += '<div class="pdf-block"><h1 class="pdf-title">'+escapeHtml(ev.label||ev.discipline)+'</h1><div class="view">' + renderEventHTML(ev) + '</div></div>';
+    });
+    downloadPdf(html, 'panel-completo-vsd.pdf', btnDownloadAll);
   });
 
   /* ---------- carga desde Google Sheets ---------- */
