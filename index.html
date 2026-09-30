@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Panel de Inscripciones VSD</title>
 <style>
-/* Layout concept: sticky-light command center — header with upload action,
-   global dashboard (KPI strip + event ranking bars + hotel ranking), drill
-   into one event via a hash-routed detail view with its own breakdown and
-   institution table. Two overlay modals handle upload + confirm-before-save. */
+/* Layout concept: sticky-light command center — global dashboard (KPI strip +
+   event ranking bars + hotel ranking), drill into one event via a hash-routed
+   detail view with its own breakdown and institution table. Datos: se traen
+   automáticamente desde hojas de Google Sheets publicadas como CSV — sin
+   subida de archivos ni backend propio. */
 :root{
   --bg:#eef0f3; --surface:#ffffff; --surface-2:#f4f5f8; --line:#dee1e6;
   --fg:#15151a; --soft:#5a5a62; --muted:#9a9aa2;
@@ -56,6 +57,7 @@ body{font-family:var(--font-body); background:var(--bg); color:var(--fg);}
 .btn-primary:disabled{ opacity:.6; cursor:default; }
 .btn-ghost{ background:transparent; color:var(--soft); border:1.5px solid var(--line); }
 .btn-ghost:hover{ border-color:var(--muted); color:var(--fg); }
+.btn-ghost:disabled{ opacity:.6; cursor:default; }
 
 .crumbs{ display:flex; }
 .crumb-back{ background:none; border:none; font-size:.82rem; font-weight:700; color:var(--soft); cursor:pointer; padding:4px 0; display:flex; align-items:center; gap:6px; }
@@ -65,12 +67,10 @@ body{font-family:var(--font-body); background:var(--bg); color:var(--fg);}
 
 @media print{
   body{ background:#fff; }
-  .btn-primary, #btnOpenUpload, #btnPrint, #btnExport, #btnImportLabel, .crumb-back, .danger-zone,
-  .overlay, .footer-note{ display:none !important; }
+  .btn-primary, #btnPrint, #btnRefresh, .crumb-back, .footer-note{ display:none !important; }
   .app{ max-width:100%; padding:0; gap:12px; }
   .section, .kpi{ box-shadow:none; border:1px solid #ccc; break-inside:avoid; }
   .event-row{ cursor:default; break-inside:avoid; }
-  a[href]::after{ content:""; }
 }
 
 .view{ display:flex; flex-direction:column; gap:18px; }
@@ -127,44 +127,13 @@ tbody td.name{ color:var(--fg); font-weight:700; }
 
 .empty-state{ align-items:center; text-align:center; gap:10px; padding:40px 20px; color:var(--soft); }
 .empty-state h3{ margin:0; font-size:1.02rem; color:var(--fg); text-transform:uppercase; font-weight:900; }
-.empty-state p{ margin:0; max-width:380px; font-size:.87rem; }
+.empty-state p{ margin:0; max-width:420px; font-size:.87rem; }
 .loading{ align-items:center; justify-content:center; padding:56px 20px; color:var(--muted); font-size:.88rem; text-align:center; }
 
-.danger-zone{ display:flex; justify-content:flex-end; padding-top:8px; border-top:1px dashed var(--line); }
-.link-btn{ background:none; border:none; font-size:.76rem; font-weight:700; color:var(--muted); cursor:pointer; padding:6px 4px; }
-.link-btn:hover{ color:var(--accent-d); }
-.link-btn.confirm{ color:var(--accent-d); }
-
-.overlay{ position:fixed; inset:0; background:rgba(10,10,12,.55); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50; }
-.modal{ background:var(--surface); border-radius:16px; max-width:480px; width:100%; padding:22px; display:flex; flex-direction:column; gap:14px; box-shadow:0 30px 60px -20px rgba(0,0,0,.5); max-height:90vh; overflow-y:auto; }
-.modal-head{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
-.modal-head h2{ margin:0; font-size:1.02rem; font-weight:900; text-transform:uppercase; }
-.icon-btn{ background:none; border:none; font-size:1.4rem; line-height:1; cursor:pointer; color:var(--muted); padding:2px 6px; }
-.icon-btn:hover{ color:var(--fg); }
-.modal-hint{ font-size:.82rem; color:var(--soft); margin:0; line-height:1.4; }
-.dropzone{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; border:2px dashed var(--line); border-radius:12px; padding:32px 16px; cursor:pointer; text-align:center; color:var(--soft); }
-.dropzone.dragover{ border-color:var(--accent); background:var(--accent-soft); }
-.dz-icon{ font-size:1.5rem; }
-.dz-text{ font-size:.85rem; }
-.form-error{ font-size:.82rem; color:var(--accent-d); background:var(--accent-soft); padding:10px 12px; border-radius:8px; }
-.form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.form-grid label{ display:flex; flex-direction:column; gap:5px; font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
-.form-grid label.span2{ grid-column:1/-1; }
-.form-grid input, .form-grid select{ font-family:inherit; font-size:.95rem; padding:9px 10px; border-radius:8px; border:1.5px solid var(--line); background:var(--surface); color:var(--fg); }
-.form-grid input:focus, .form-grid select:focus{ outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent); }
-.ci-preview{ font-size:.8rem; color:var(--soft); background:var(--surface-2); border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; }
-.ci-preview .row{ display:flex; justify-content:space-between; gap:8px; }
-.ci-fields{ display:flex; flex-wrap:wrap; gap:6px; }
-.field-chip{ font-size:.66rem; font-weight:700; padding:3px 8px; border-radius:20px; background:var(--surface); }
-.field-chip.ok{ color:var(--ok); }
-.field-chip.missing{ color:var(--muted); }
-.ci-warning{ font-size:.8rem; background:var(--accent-soft); color:var(--accent-d); padding:10px 12px; border-radius:8px; }
-.modal-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:2px; }
-
 .footer-note{ text-align:center; font-size:.74rem; color:var(--muted); padding-top:6px; }
+.sync-note{ text-align:center; font-size:.72rem; color:var(--muted); margin:0; }
 
 @media (max-width:480px){
-  .form-grid{ grid-template-columns:1fr; }
   .rank-row{ grid-template-columns:1fr; row-gap:4px; }
   .rank-value{ text-align:left; }
   .event-row-top{ flex-direction:column; align-items:flex-start; }
@@ -183,14 +152,10 @@ tbody td.name{ color:var(--fg); font-weight:700; }
       </div>
     </div>
     <div class="topbar-actions">
+      <button class="btn btn-ghost" id="btnRefresh" type="button">&#8635; Actualizar</button>
       <button class="btn btn-ghost" id="btnPrint" type="button">&#128424; Imprimir</button>
-      <button class="btn btn-ghost" id="btnExport" type="button">&#8681; Descargar data.json</button>
-      <label class="btn btn-ghost" id="btnImportLabel" for="importInput" style="cursor:pointer;">&#8679; Subir data.json</label>
-      <input type="file" id="importInput" accept="application/json,.json" hidden>
-      <button class="btn btn-primary" id="btnOpenUpload" type="button">+ Cargar planilla</button>
     </div>
   </header>
-  <p class="footer-note" id="publishHint">Para publicar los datos en el link público: subí una planilla, después tocá <strong>Descargar data.json</strong> y reemplazá el archivo <code>data.json</code> en tu repositorio de GitHub (o donde alojes esta página).</p>
 
   <nav class="crumbs" id="crumbs" hidden>
     <button class="crumb-back" id="btnBack" type="button">&larr; Panel general</button>
@@ -199,47 +164,11 @@ tbody td.name{ color:var(--fg); font-weight:700; }
   <main id="viewGlobal" class="view"></main>
   <main id="viewEvent" class="view" hidden></main>
 
-  <p class="footer-note">VSD Eventos · Villa Carlos Paz, Córdoba</p>
+  <p class="sync-note" id="syncNote"></p>
+  <p class="footer-note">VSD Eventos &middot; Villa Carlos Paz, C&oacute;rdoba</p>
 </div>
 
-<div class="overlay" id="uploadOverlay" hidden>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="uploadTitle">
-    <div class="modal-head">
-      <h2 id="uploadTitle">Cargar planilla</h2>
-      <button class="icon-btn" id="btnCloseUpload" type="button" aria-label="Cerrar">&times;</button>
-    </div>
-    <p class="modal-hint">Subí el .xlsx de un evento. Columnas esperadas: Institución, Provincia, Pais, Pax, Hotel, Habitual/Nuevo. Nombrá el archivo como ya venís haciendo, por ejemplo <strong>2026-OCT_Mini_Basquet_VSD.xlsx</strong>, así el panel detecta año, mes y disciplina solo.</p>
-    <label class="dropzone" id="dropzone" for="fileInput">
-      <span class="dz-icon">&#8679;</span>
-      <span class="dz-text">Arrastrá el archivo acá o hacé clic para elegirlo</span>
-    </label>
-    <input type="file" id="fileInput" accept=".xlsx,.xls" hidden>
-    <div id="uploadError" class="form-error" hidden></div>
-  </div>
-</div>
-
-<div class="overlay" id="confirmOverlay" hidden>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
-    <div class="modal-head">
-      <h2 id="confirmTitle">Confirmar evento</h2>
-      <button class="icon-btn" id="btnCloseConfirm" type="button" aria-label="Cerrar">&times;</button>
-    </div>
-    <p class="modal-hint">Esto lo detectamos del nombre del archivo <strong id="ciFileName"></strong>. Revisalo antes de guardar.</p>
-    <div class="form-grid">
-      <label>Año<input type="number" id="ciYear" min="2020" max="2099" step="1"></label>
-      <label>Mes<select id="ciMonth"></select></label>
-      <label class="span2">Disciplina<input type="text" id="ciDiscipline" placeholder="Ej: Mini Básquet"></label>
-    </div>
-    <div class="ci-preview" id="ciPreview"></div>
-    <div class="ci-warning" id="ciWarning" hidden></div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" id="ciCancel" type="button">Cancelar</button>
-      <button class="btn btn-primary" id="ciSave" type="button">Guardar evento</button>
-    </div>
-  </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script>
 (function(){
   "use strict";
@@ -250,7 +179,6 @@ tbody td.name{ color:var(--fg); font-weight:700; }
     ['JUL','Julio'],['AGO','Agosto'],['SEP','Septiembre'],['OCT','Octubre'],['NOV','Noviembre'],['DIC','Diciembre']
   ];
   var MONTH_MAP = {}; MONTHS.forEach(function(m){ MONTH_MAP[m[0]] = m[1]; });
-  var MONTH_ALIASES = { SET:'SEP', SEPT:'SEP', JAN:'ENE', APR:'ABR', AUG:'AGO', DEC:'DIC' };
 
   var FIELD_ALIASES = {
     nombre: ['institucion','institución','club','clubes','equipo','colegio','nombre','institution'],
@@ -262,12 +190,28 @@ tbody td.name{ color:var(--fg); font-weight:700; }
   };
   Object.keys(FIELD_ALIASES).forEach(function(k){ FIELD_ALIASES[k] = FIELD_ALIASES[k].map(normKey); });
 
+  /* ---------- fuentes: hojas de Google Sheets publicadas como CSV ----------
+     Cada evento (disciplina + mes) es una pestaña del Sheet, publicada con
+     Archivo → Compartir → Publicar en la Web → esa pestaña → CSV. Para
+     agregar un evento nuevo, sumá una entrada acá con su gid. */
+  var EVENT_SOURCES = [
+    { year:2026, monthKey:'MAY', discipline:'Maxi Básquet',
+      url:'https://docs.google.com/spreadsheets/d/e/2PACX-1vSKYbu3Qpb8BNihwoXRRs1j2cN6WE9McKd4QmbVXyODXifmh8l4mT877-2F6cxus-zzXF9VEzXJj3Fl/pub?gid=1303847758&single=true&output=csv' },
+    { year:2026, monthKey:'AGO', discipline:'Maxi Básquet',
+      url:'https://docs.google.com/spreadsheets/d/e/2PACX-1vSKYbu3Qpb8BNihwoXRRs1j2cN6WE9McKd4QmbVXyODXifmh8l4mT877-2F6cxus-zzXF9VEzXJj3Fl/pub?gid=1910578355&single=true&output=csv' },
+    { year:2026, monthKey:'SEP', discipline:'Fútbol Infantil',
+      url:'https://docs.google.com/spreadsheets/d/e/2PACX-1vSKYbu3Qpb8BNihwoXRRs1j2cN6WE9McKd4QmbVXyODXifmh8l4mT877-2F6cxus-zzXF9VEzXJj3Fl/pub?gid=1315322604&single=true&output=csv' },
+    { year:2026, monthKey:'SEP', discipline:'Hockey Infantil',
+      url:'https://docs.google.com/spreadsheets/d/e/2PACX-1vSKYbu3Qpb8BNihwoXRRs1j2cN6WE9McKd4QmbVXyODXifmh8l4mT877-2F6cxus-zzXF9VEzXJj3Fl/pub?gid=940960813&single=true&output=csv' },
+    { year:2026, monthKey:'OCT', discipline:'Mini Básquet',
+      url:'https://docs.google.com/spreadsheets/d/e/2PACX-1vSKYbu3Qpb8BNihwoXRRs1j2cN6WE9McKd4QmbVXyODXifmh8l4mT877-2F6cxus-zzXF9VEzXJj3Fl/pub?gid=1339481850&single=true&output=csv' },
+    { year:2026, monthKey:'OCT', discipline:'Mami Hockey',
+      url:'https://docs.google.com/spreadsheets/d/e/2PACX-1vSKYbu3Qpb8BNihwoXRRs1j2cN6WE9McKd4QmbVXyODXifmh8l4mT877-2F6cxus-zzXF9VEzXJj3Fl/pub?gid=0&single=true&output=csv' }
+  ];
+
   /* ---------- helpers ---------- */
   function normKey(s){
     return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
-  }
-  function titleCase(s){
-    return String(s||'').trim().split(/\s+/).map(function(w){ return w.length ? w[0].toUpperCase()+w.slice(1).toLowerCase() : w; }).join(' ');
   }
   function slugifyReadable(s){
     var out = String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-+|-+$)/g,'');
@@ -285,21 +229,6 @@ tbody td.name{ color:var(--fg); font-weight:700; }
   var SUMMARY_LABELS = ['total','totales','totalpax','nuevos','habituales','porcentualmentenuevos','porcentualmentehabituales','resumen'].map(normKey);
   function isSummaryRow(name){ return SUMMARY_LABELS.indexOf(normKey(name)) !== -1; }
 
-  function parseFilename(filename){
-    var base = filename.replace(/\.[^.]+$/,'');
-    var parts = base.split(/[-_]+/).filter(Boolean);
-    var year = null, monthKey = null;
-    if(parts.length && /^\d{4}$/.test(parts[0])){ year = parseInt(parts[0],10); parts.shift(); }
-    if(parts.length){
-      var cand = parts[0].toUpperCase();
-      if(MONTH_ALIASES[cand]) cand = MONTH_ALIASES[cand];
-      if(MONTH_MAP[cand]){ monthKey = cand; parts.shift(); }
-    }
-    while(parts.length && /^vsd$/i.test(parts[parts.length-1])) parts.pop();
-    var discipline = titleCase(parts.join(' '));
-    return { year: year, monthKey: monthKey, discipline: discipline };
-  }
-
   function detectFieldMap(headers){
     var map = {}; var used = {};
     Object.keys(FIELD_ALIASES).forEach(function(field){
@@ -310,12 +239,12 @@ tbody td.name{ color:var(--fg); font-weight:700; }
     return map;
   }
 
-  function parseWorkbook(arrayBuffer){
-    var wb = XLSX.read(arrayBuffer, { type:'array' });
-    var sheetName = wb.SheetNames.find(function(n){ return normKey(n)==='equipos'; }) || wb.SheetNames[0];
-    var ws = wb.Sheets[sheetName];
-    var rows = XLSX.utils.sheet_to_json(ws, { defval:'' });
-    if(!rows.length) return { institutions:[], fieldMap:{} };
+  /* Toma las filas ya parseadas del CSV (array de objetos header->valor) y
+     devuelve solo las instituciones válidas. Cualquier columna que no sea
+     Institución/Provincia/Pais/Pax/Hotel/Habitual-Nuevo (ej: Teléfono, Mail)
+     nunca se lee ni se guarda acá. */
+  function institutionsFromRows(rows){
+    if(!rows || !rows.length) return { institutions:[], fieldMap:{} };
     var headers = Object.keys(rows[0]);
     var fieldMap = detectFieldMap(headers);
     var institutions = [];
@@ -404,43 +333,12 @@ tbody td.name{ color:var(--fg); font-weight:700; }
   var viewGlobalEl = document.getElementById('viewGlobal');
   var viewEventEl = document.getElementById('viewEvent');
   var btnBack = document.getElementById('btnBack');
-  var btnOpenUpload = document.getElementById('btnOpenUpload');
   var btnPrint = document.getElementById('btnPrint');
-  var btnExport = document.getElementById('btnExport');
-  var importInput = document.getElementById('importInput');
-  var uploadOverlay = document.getElementById('uploadOverlay');
-  var btnCloseUpload = document.getElementById('btnCloseUpload');
-  var dropzone = document.getElementById('dropzone');
-  var fileInput = document.getElementById('fileInput');
-  var uploadErrorEl = document.getElementById('uploadError');
-  var confirmOverlay = document.getElementById('confirmOverlay');
-  var btnCloseConfirm = document.getElementById('btnCloseConfirm');
-  var ciFileNameEl = document.getElementById('ciFileName');
-  var ciYearEl = document.getElementById('ciYear');
-  var ciMonthEl = document.getElementById('ciMonth');
-  var ciDisciplineEl = document.getElementById('ciDiscipline');
-  var ciPreviewEl = document.getElementById('ciPreview');
-  var ciWarningEl = document.getElementById('ciWarning');
-  var ciCancel = document.getElementById('ciCancel');
-  var ciSaveEl = document.getElementById('ciSave');
-
-  MONTHS.forEach(function(m){
-    var opt = document.createElement('option');
-    opt.value = m[0]; opt.textContent = m[1] + ' (' + m[0] + ')';
-    ciMonthEl.appendChild(opt);
-  });
+  var btnRefresh = document.getElementById('btnRefresh');
+  var syncNoteEl = document.getElementById('syncNote');
 
   /* ---------- state ---------- */
   var EVENTS = [];
-  var pendingParse = null;
-  var STORAGE_KEY = 'vsd_panel_events_v1';
-
-  function loadLocal(){
-    try{ return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }catch(e){ return []; }
-  }
-  function saveLocal(events){
-    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(events)); }catch(e){}
-  }
 
   /* ---------- routing ---------- */
   function currentSlug(){
@@ -486,9 +384,8 @@ tbody td.name{ color:var(--fg); font-weight:700; }
   function renderGlobalHTML(events){
     if(!events.length){
       return '<div class="section empty-state">' +
-        '<h3>Todav&iacute;a no carg&aacute;s ning&uacute;n evento</h3>' +
-        '<p>Sub&iacute; la primera planilla (.xlsx) de un evento &mdash; Instituci&oacute;n, Provincia, Pais, Pax, Hotel y Habitual/Nuevo &mdash; y ac&aacute; vas a ver el resumen autom&aacute;ticamente.</p>' +
-        '<button class="btn btn-primary" id="btnEmptyUpload" type="button">+ Cargar planilla</button>' +
+        '<h3>No hay datos cargados todav&iacute;a</h3>' +
+        '<p>Revis&aacute; que las hojas del Google Sheet tengan filas y est&eacute;n publicadas (Archivo &rarr; Compartir &rarr; Publicar en la web), y toc&aacute; "Actualizar".</p>' +
         '</div>';
     }
     var habitualInstTot=0, nuevoInstTot=0, habitualPaxTot=0, nuevoPaxTot=0, allInsts=[];
@@ -585,143 +482,13 @@ tbody td.name{ color:var(--fg); font-weight:700; }
       '<thead><tr><th>Instituci&oacute;n</th><th>Provincia</th><th>Pa&iacute;s</th><th>Pax</th><th>Hotel</th><th>Estado</th></tr></thead>' +
       '<tbody>' + rows + '</tbody></table></div></section>';
 
-    var danger = '<div class="danger-zone"><button class="link-btn" id="btnDeleteEvent" data-slug="'+escapeHtml(ev.id)+'" data-armed="0" type="button">Eliminar evento</button></div>';
-
-    return kpi + bars + geoCountry + geoProvince + hotelSec + table + danger;
+    return kpi + bars + geoCountry + geoProvince + hotelSec + table;
   }
 
-  /* ---------- upload modal ---------- */
-  function openUploadModal(){ uploadErrorEl.hidden = true; uploadErrorEl.textContent = ''; uploadOverlay.hidden = false; }
-  function closeUploadModal(){ uploadOverlay.hidden = true; fileInput.value = ''; }
-  btnOpenUpload.addEventListener('click', openUploadModal);
-  btnCloseUpload.addEventListener('click', closeUploadModal);
-  uploadOverlay.addEventListener('click', function(e){ if(e.target === uploadOverlay) closeUploadModal(); });
-
-  ['dragenter','dragover'].forEach(function(evt){
-    dropzone.addEventListener(evt, function(e){ e.preventDefault(); dropzone.classList.add('dragover'); });
-  });
-  ['dragleave','drop'].forEach(function(evt){
-    dropzone.addEventListener(evt, function(e){ e.preventDefault(); dropzone.classList.remove('dragover'); });
-  });
-  dropzone.addEventListener('drop', function(e){
-    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if(f) handleFile(f);
-  });
-  fileInput.addEventListener('change', function(e){
-    var f = e.target.files && e.target.files[0];
-    if(f) handleFile(f);
-  });
-
-  function handleFile(file){
-    uploadErrorEl.hidden = true;
-    if(!/\.(xlsx|xls)$/i.test(file.name)){
-      uploadErrorEl.textContent = 'El archivo tiene que ser .xlsx o .xls.';
-      uploadErrorEl.hidden = false;
-      return;
-    }
-    var reader = new FileReader();
-    reader.onerror = function(){
-      uploadErrorEl.textContent = 'No pudimos leer el archivo. Probá de nuevo.';
-      uploadErrorEl.hidden = false;
-    };
-    reader.onload = function(){
-      try{
-        var parsed = parseWorkbook(reader.result);
-        if(!parsed.institutions.length){
-          uploadErrorEl.textContent = 'No encontramos filas con Institución y Pax en la hoja. Revisá el archivo.';
-          uploadErrorEl.hidden = false;
-          return;
-        }
-        var guess = parseFilename(file.name);
-        openConfirmModal(file.name, guess, parsed);
-        closeUploadModal();
-      } catch(err){
-        uploadErrorEl.textContent = 'No pudimos leer el archivo. Verificá que sea un Excel válido.';
-        uploadErrorEl.hidden = false;
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  }
-
-  /* ---------- confirm modal ---------- */
-  function openConfirmModal(filename, guess, parsed){
-    pendingParse = parsed;
-    ciFileNameEl.textContent = filename;
-    ciYearEl.value = guess.year || new Date().getFullYear();
-    ciMonthEl.value = guess.monthKey || 'ENE';
-    ciDisciplineEl.value = guess.discipline || '';
-    updateCiPreview(parsed);
-    updateCiWarning();
-    confirmOverlay.hidden = false;
-  }
-  function closeConfirmModal(){ confirmOverlay.hidden = true; pendingParse = null; }
-  btnCloseConfirm.addEventListener('click', closeConfirmModal);
-  ciCancel.addEventListener('click', closeConfirmModal);
-  confirmOverlay.addEventListener('click', function(e){ if(e.target === confirmOverlay) closeConfirmModal(); });
-
-  function updateCiPreview(parsed){
-    var fm = parsed.fieldMap;
-    function chip(label, present){ return '<span class="field-chip '+(present?'ok':'missing')+'">'+(present?'✓':'—')+' '+label+'</span>'; }
-    var totalPax = parsed.institutions.reduce(function(s,i){ return s+(i.pax||0); }, 0);
-    ciPreviewEl.innerHTML =
-      '<div class="row"><span>Instituciones detectadas</span><strong>'+parsed.institutions.length+'</strong></div>' +
-      '<div class="row"><span>Pax total detectado</span><strong>'+fmtInt(totalPax)+'</strong></div>' +
-      '<div class="ci-fields">' + chip('Instituci&oacute;n', !!fm.nombre) + chip('Pax', !!fm.pax) + chip('Provincia', !!fm.provincia) +
-      chip('Pa&iacute;s', !!fm.pais) + chip('Hotel', !!fm.hotel) + chip('Habitual/Nuevo', !!fm.tipo) + '</div>';
-  }
-
-  function updateCiWarning(){
-    var year = parseInt(ciYearEl.value, 10);
-    var monthKey = ciMonthEl.value;
-    var discipline = ciDisciplineEl.value.trim();
-    if(!discipline || !year){ ciWarningEl.hidden = true; return; }
-    var slug = eventSlug(year, monthKey, discipline);
-    var exists = EVENTS.find(function(e){ return e.id === slug; });
-    if(exists){
-      ciWarningEl.textContent = 'Ya existe un evento "'+exists.label+'". Guardar va a reemplazar sus datos.';
-      ciWarningEl.hidden = false;
-    } else {
-      ciWarningEl.hidden = true;
-    }
-  }
-  [ciYearEl, ciDisciplineEl].forEach(function(el){ el.addEventListener('input', updateCiWarning); });
-  ciMonthEl.addEventListener('change', updateCiWarning);
-
-  ciSaveEl.addEventListener('click', function(){
-    if(!pendingParse) return;
-    var year = parseInt(ciYearEl.value, 10);
-    var monthKey = ciMonthEl.value;
-    var discipline = ciDisciplineEl.value.trim();
-    if(!year || !monthKey || !discipline){
-      ciWarningEl.textContent = 'Completá año, mes y disciplina antes de guardar.';
-      ciWarningEl.hidden = false;
-      return;
-    }
-    var monthLabel = MONTH_MAP[monthKey];
-    var slug = eventSlug(year, monthKey, discipline);
-    var existing = EVENTS.find(function(e){ return e.id === slug; });
-    var nowIso = new Date().toISOString();
-    var eventDoc = {
-      id: slug,
-      year: year, monthKey: monthKey, monthLabel: monthLabel, discipline: discipline,
-      label: discipline + ' — ' + monthLabel + ' ' + year,
-      createdAt: (existing && existing.createdAt) || nowIso,
-      updatedAt: nowIso,
-      institutions: pendingParse.institutions
-    };
-    EVENTS = EVENTS.filter(function(e){ return e.id !== slug; });
-    EVENTS.push(eventDoc);
-    saveLocal(EVENTS);
-    closeConfirmModal();
-    goEvent(slug);
-  });
-
-  /* ---------- event delegation: global view + event view ---------- */
+  /* ---------- event delegation ---------- */
   viewGlobalEl.addEventListener('click', function(e){
     var row = e.target.closest('.event-row');
-    if(row){ goEvent(row.dataset.slug); return; }
-    var btn = e.target.closest('#btnEmptyUpload');
-    if(btn) openUploadModal();
+    if(row) goEvent(row.dataset.slug);
   });
   viewGlobalEl.addEventListener('keydown', function(e){
     if(e.key === 'Enter' || e.key === ' '){
@@ -731,76 +498,48 @@ tbody td.name{ color:var(--fg); font-weight:700; }
   });
   btnBack.addEventListener('click', goGlobal);
   btnPrint.addEventListener('click', function(){ window.print(); });
+  btnRefresh.addEventListener('click', loadAll);
 
-  viewEventEl.addEventListener('click', function(e){
-    var btn = e.target.closest('#btnDeleteEvent');
-    if(!btn) return;
-    if(btn.dataset.armed === '1'){
-      btn.disabled = true;
-      btn.textContent = 'Eliminando…';
-      EVENTS = EVENTS.filter(function(e){ return e.id !== btn.dataset.slug; });
-      saveLocal(EVENTS);
-      goGlobal();
-    } else {
-      btn.dataset.armed = '1';
-      btn.textContent = 'Confirmar eliminación';
-      btn.classList.add('confirm');
-      setTimeout(function(){
-        if(btn.isConnected && btn.dataset.armed === '1'){
-          btn.dataset.armed = '0';
-          btn.textContent = 'Eliminar evento';
-          btn.classList.remove('confirm');
-        }
-      }, 4000);
-    }
-  });
-
-  /* ---------- export / import ---------- */
-  btnExport.addEventListener('click', function(){
-    var blob = new Blob([JSON.stringify(EVENTS, null, 2)], { type:'application/json' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url; a.download = 'data.json';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
-  });
-  importInput.addEventListener('change', function(){
-    var file = importInput.files && importInput.files[0];
-    if(!file) return;
-    var reader = new FileReader();
-    reader.onload = function(){
-      try{
-        var data = JSON.parse(String(reader.result));
-        if(!Array.isArray(data)) throw new Error('formato inválido');
-        EVENTS = data;
-        saveLocal(EVENTS);
-        goGlobal();
-        renderRoute();
-      }catch(e){
-        alert('No pudimos leer ese archivo como data.json válido.');
-      }
-      importInput.value = '';
-    };
-    reader.readAsText(file);
-  });
-
-  /* ---------- boot ----------
-     1) intenta traer data.json publicado junto a esta página (lo que ve
-        cualquiera que abra el link público, sin subir nada);
-     2) si no existe o falla, usa lo que haya guardado en este navegador. */
-  renderLoading();
-  (function init(){
-    fetch('data.json', { cache:'no-store' }).then(function(res){
-      if(!res.ok) throw new Error('no data.json');
-      return res.json();
-    }).then(function(data){
-      EVENTS = Array.isArray(data) ? data : [];
-      renderRoute();
-    }).catch(function(){
-      EVENTS = loadLocal();
-      renderRoute();
+  /* ---------- carga desde Google Sheets ---------- */
+  function fetchSource(source){
+    var slug = eventSlug(source.year, source.monthKey, source.discipline);
+    var monthLabel = MONTH_MAP[source.monthKey];
+    return fetch(source.url, { cache:'no-store' }).then(function(res){
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      return res.text();
+    }).then(function(csvText){
+      var parsed = Papa.parse(csvText, { header:true, skipEmptyLines:true });
+      var result = institutionsFromRows(parsed.data);
+      return {
+        id: slug, year: source.year, monthKey: source.monthKey, monthLabel: monthLabel,
+        discipline: source.discipline, label: source.discipline + ' — ' + monthLabel + ' ' + source.year,
+        institutions: result.institutions
+      };
     });
-  })();
+  }
+
+  function loadAll(){
+    renderLoading();
+    btnRefresh.disabled = true;
+    syncNoteEl.textContent = '';
+    Promise.allSettled(EVENT_SOURCES.map(fetchSource)).then(function(results){
+      var events = []; var failedLabels = [];
+      results.forEach(function(r, idx){
+        if(r.status === 'fulfilled') events.push(r.value);
+        else failedLabels.push(EVENT_SOURCES[idx].discipline + ' ' + EVENT_SOURCES[idx].monthKey);
+      });
+      EVENTS = events;
+      renderRoute();
+      var now = new Date().toLocaleString('es-AR', { hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' });
+      syncNoteEl.textContent = 'Datos sincronizados desde Google Sheets &middot; '.replace('&middot;','·') + now +
+        (failedLabels.length ? ' — no se pudieron traer: ' + failedLabels.join(', ') : '');
+    }).finally(function(){
+      btnRefresh.disabled = false;
+    });
+  }
+
+  /* ---------- boot ---------- */
+  loadAll();
 })();
 </script>
 </body>
