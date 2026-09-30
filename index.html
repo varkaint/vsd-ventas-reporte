@@ -67,11 +67,30 @@ body{font-family:var(--font-body); background:var(--bg); color:var(--fg);}
 
 @media print{
   body{ background:#fff; }
-  .btn-primary, #btnPrint, #btnRefresh, .crumb-back, .footer-note{ display:none !important; }
+  .btn-primary, #btnRefresh, .print-menu-wrap, .crumb-back, .footer-note, .sync-note{ display:none !important; }
   .app{ max-width:100%; padding:0; gap:12px; }
   .section, .kpi{ box-shadow:none; border:1px solid #ccc; break-inside:avoid; }
   .event-row{ cursor:default; break-inside:avoid; }
+  #printAllContainer{ display:none; }
+  body.print-all-mode #printAllContainer{ display:block; }
+  body.print-all-mode .crumbs, body.print-all-mode #viewGlobal, body.print-all-mode #viewEvent{ display:none !important; }
+  body.print-force-global #viewEvent{ display:none !important; }
+  body.print-force-global #viewGlobal{ display:block !important; }
+  .print-break{ break-before:page; page-break-before:always; }
+  .print-block{ display:flex; flex-direction:column; gap:18px; margin-bottom:24px; }
+  .print-title{ font-size:1.1rem; font-weight:900; text-transform:uppercase; letter-spacing:-.01em; margin:0 0 4px; }
 }
+
+#printAllContainer{ display:none; }
+
+@keyframes vsdViewIn{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:translateY(0); } }
+.view-enter{ animation:vsdViewIn .32s cubic-bezier(.22,.61,.36,1); }
+
+.print-menu-wrap{ position:relative; }
+.print-menu{ position:absolute; top:calc(100% + 6px); right:0; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); padding:6px; display:flex; flex-direction:column; gap:2px; min-width:200px; z-index:40; }
+.print-menu button{ background:none; border:none; text-align:left; font-family:inherit; font-size:.82rem; font-weight:600; color:var(--fg); padding:9px 10px; border-radius:7px; cursor:pointer; text-transform:none; letter-spacing:0; }
+.print-menu button:hover{ background:var(--surface-2); }
+.print-menu button:disabled{ color:var(--muted); cursor:default; background:none; }
 
 .view{ display:flex; flex-direction:column; gap:18px; }
 
@@ -153,7 +172,14 @@ tbody td.name{ color:var(--fg); font-weight:700; }
     </div>
     <div class="topbar-actions">
       <button class="btn btn-ghost" id="btnRefresh" type="button">&#8635; Actualizar</button>
-      <button class="btn btn-ghost" id="btnPrint" type="button">&#128424; Imprimir</button>
+      <div class="print-menu-wrap" id="printMenuWrap">
+        <button class="btn btn-ghost" id="btnPrint" type="button" aria-haspopup="true" aria-expanded="false">&#128424; Imprimir &#9662;</button>
+        <div class="print-menu" id="printMenu" hidden>
+          <button type="button" data-print="global">Panel general</button>
+          <button type="button" data-print="event" id="printMenuEvent">Este evento</button>
+          <button type="button" data-print="all">Todo (panel + eventos)</button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -163,6 +189,7 @@ tbody td.name{ color:var(--fg); font-weight:700; }
 
   <main id="viewGlobal" class="view"></main>
   <main id="viewEvent" class="view" hidden></main>
+  <div id="printAllContainer"></div>
 
   <p class="sync-note" id="syncNote"></p>
   <p class="footer-note">VSD Eventos &middot; Villa Carlos Paz, C&oacute;rdoba</p>
@@ -336,6 +363,10 @@ tbody td.name{ color:var(--fg); font-weight:700; }
   var btnPrint = document.getElementById('btnPrint');
   var btnRefresh = document.getElementById('btnRefresh');
   var syncNoteEl = document.getElementById('syncNote');
+  var printMenuWrap = document.getElementById('printMenuWrap');
+  var printMenu = document.getElementById('printMenu');
+  var printMenuEvent = document.getElementById('printMenuEvent');
+  var printAllContainer = document.getElementById('printAllContainer');
 
   /* ---------- state ---------- */
   var EVENTS = [];
@@ -364,12 +395,19 @@ tbody td.name{ color:var(--fg); font-weight:700; }
     viewGlobalEl.innerHTML = '<div class="section loading">Cargando datos&hellip;</div>';
   }
 
+  function animateIn(el){
+    el.classList.remove('view-enter');
+    void el.offsetWidth; /* reflow para poder re-disparar la animación */
+    el.classList.add('view-enter');
+  }
+
   function showGlobalView(){
     viewTitleEl.textContent = 'Panel de inscripciones';
     crumbsEl.hidden = true;
     viewEventEl.hidden = true;
     viewGlobalEl.hidden = false;
     viewGlobalEl.innerHTML = renderGlobalHTML(EVENTS);
+    animateIn(viewGlobalEl);
   }
 
   function showEventView(ev){
@@ -378,6 +416,7 @@ tbody td.name{ color:var(--fg); font-weight:700; }
     viewGlobalEl.hidden = true;
     viewEventEl.hidden = false;
     viewEventEl.innerHTML = renderEventHTML(ev);
+    animateIn(viewEventEl);
   }
 
   /* ---------- render: global dashboard ---------- */
@@ -497,8 +536,62 @@ tbody td.name{ color:var(--fg); font-weight:700; }
     }
   });
   btnBack.addEventListener('click', goGlobal);
-  btnPrint.addEventListener('click', function(){ window.print(); });
   btnRefresh.addEventListener('click', loadAll);
+
+  /* ---------- impresión: panel general / este evento / todo ---------- */
+  function openPrintMenu(){
+    printMenuEvent.disabled = !currentSlug();
+    printMenu.hidden = false;
+    btnPrint.setAttribute('aria-expanded', 'true');
+  }
+  function closePrintMenu(){
+    printMenu.hidden = true;
+    btnPrint.setAttribute('aria-expanded', 'false');
+  }
+  btnPrint.addEventListener('click', function(e){
+    e.stopPropagation();
+    if(printMenu.hidden) openPrintMenu(); else closePrintMenu();
+  });
+  document.addEventListener('click', function(e){
+    if(!printMenu.hidden && !e.target.closest('#printMenuWrap')) closePrintMenu();
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape') closePrintMenu();
+  });
+
+  function buildPrintAllHTML(){
+    var sorted = EVENTS.slice().sort(function(a,b){ return eventStats(b).totalPax - eventStats(a).totalPax; });
+    var html = '<section class="print-block"><h1 class="print-title">Panel general</h1>' + renderGlobalHTML(EVENTS) + '</section>';
+    sorted.forEach(function(ev){
+      html += '<section class="print-block print-break"><h1 class="print-title">'+escapeHtml(ev.label||ev.discipline)+'</h1>' + renderEventHTML(ev) + '</section>';
+    });
+    return html;
+  }
+
+  function printView(mode){
+    closePrintMenu();
+    if(mode === 'global'){
+      viewGlobalEl.innerHTML = renderGlobalHTML(EVENTS);
+      document.body.classList.add('print-force-global');
+      window.print();
+    } else if(mode === 'event'){
+      if(!currentSlug()) return;
+      window.print();
+    } else if(mode === 'all'){
+      printAllContainer.innerHTML = buildPrintAllHTML();
+      document.body.classList.add('print-all-mode');
+      window.print();
+    }
+  }
+  printMenu.addEventListener('click', function(e){
+    var btn = e.target.closest('button[data-print]');
+    if(!btn || btn.disabled) return;
+    printView(btn.dataset.print);
+  });
+  window.addEventListener('afterprint', function(){
+    document.body.classList.remove('print-force-global', 'print-all-mode');
+    renderRoute();
+  });
 
   /* ---------- carga desde Google Sheets ---------- */
   function fetchSource(source){
